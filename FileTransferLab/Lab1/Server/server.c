@@ -15,6 +15,8 @@
 
 /*
 
+ip addr - get ip address of ug machine
+
 //used to prep the socket address structure for subsequent use
 
 struct addrinfo {
@@ -162,6 +164,10 @@ int main(int argc, char *argv[])
 
     if (strcmp(buf,ftp) == 0) {
         sendto(sockfd, "yes", strlen("yes"), 0, (struct sockaddr *)&their_addr, addr_len);
+    }
+
+    else {
+        sendto(sockfd, "no", strlen("no"), 0, (struct sockaddr *)&their_addr, addr_len);
     }
 
     close(sockfd);

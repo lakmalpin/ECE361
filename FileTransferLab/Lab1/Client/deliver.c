@@ -76,16 +76,15 @@ int main(int argc, char *argv[])
     filename = strtok(NULL, " ");
     filename[strlen(filename)-1] = '\0';
 
-    if (access(filename,F_OK) == 0) {
-        
-    }
-    else{
+    if (access(filename,F_OK) != 0) {
         return 1;
     }
+
+    char *protocol_type = strtok(userin, " ");
         
     //printf("%s\n",ftp);
 
-    if ((numbytes = sendto(sockfd, ftp, strlen(ftp), 0, p->ai_addr, p->ai_addrlen)) == -1) {
+    if ((numbytes = sendto(sockfd, protocol_type, strlen(protocol_type), 0, p->ai_addr, p->ai_addrlen)) == -1) {
         perror("talker: sendto");
         exit(1);
     }
