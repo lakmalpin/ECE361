@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #define MAXBUFLEN 100
+#define PACKETSIZE 1000
 
 void *get_in_addr(struct sockaddr *sa)
 {
@@ -21,6 +22,44 @@ void *get_in_addr(struct sockaddr *sa)
 
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
+
+int find_total_frag(int size)
+{
+    int count = 1000;
+
+    if (size%count == 0){
+        return (size/1000);
+    }
+
+    while ( (size%count != size) ){
+        count = count + 1000;
+    }
+
+    return (count/1000);
+
+}
+
+void create_packet(int total_frag, int frag_no, int size, char* filename, char* filedata, char* packet){
+    char t_f[100];
+    char t_n[100];
+    char s[100];
+
+    sprintf(t_f, "%d", total_frag);
+    sprintf(t_n, "%d", frag_no);
+    sprintf(s, "%d", size);
+
+    printf("Frag Number: %d\n", frag_no);
+
+    strcat (packet, t_f);
+    strcat (packet, ":");
+    strcat (packet, t_n);
+    strcat (packet, ":");
+    strcat (packet, s);
+    strcat (packet, ":");
+    strcat (packet, filename);
+    strcat (packet, ":");
+    strcat (packet, filedata);
+} 
 
 int main(int argc, char *argv[])
 {
@@ -37,6 +76,15 @@ int main(int argc, char *argv[])
     socklen_t addr_len;
     char s[INET6_ADDRSTRLEN];
     char yes[] = "yes";
+
+    int c;
+    int d;
+    int num_bytes = 0;
+    int total_frag;
+    char filedata[PACKETSIZE];
+    int byte_count = 0;
+    int total_byte_count = 0;
+    int packet_count = 1;
     
     
     if (argc != 3) {
@@ -76,8 +124,48 @@ int main(int argc, char *argv[])
     filename = strtok(NULL, " ");
     filename[strlen(filename)-1] = '\0';
 
-    if (access(filename,F_OK) != 0) {
+    FILE *file;
+    file = fopen(filename,"r");
+    if(file){
+        while ((c = getc(file)) != EOF) {
+            num_bytes = num_bytes + 1;
+        }
+        printf("%d\n",num_bytes);
+
+        total_frag = find_total_frag(num_bytes);
+
+        printf("Total Frag: %d\n",total_frag);
+
+        fclose(file); 
+    }
+    else{
         return 1;
+    }
+
+    const char *packets_list[total_frag];
+    char packet[PACKETSIZE + 100]; 
+    file = fopen(filename, "r");
+
+    if(file){
+        while ( (d = getc(file)) != EOF ){
+
+            filedata[byte_count] = d;
+            byte_count ++;
+            total_byte_count ++;
+
+            if ((byte_count == PACKETSIZE) || (total_byte_count == num_bytes)) {
+                create_packet(total_frag, packet_count, byte_count, filename, filedata, packet);
+                packets_list[packet_count] = packet;
+                printf("%s\n",packet);
+                memset(packet, '\0', PACKETSIZE + 100);
+                memset(filedata, '\0', byte_count);
+                byte_count = 0;
+                packet_count ++;
+            }
+
+        }
+        
+        fclose(file);      
     }
 
     char *protocol_type = strtok(userin, " ");
