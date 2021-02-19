@@ -11,7 +11,7 @@
 
 #define BACKLOG 10 // how many pending connections queue will hold
 
-#define MAXBUFLEN 100
+#define MAXBUFLEN 1500
 
 /*
 
@@ -85,6 +85,36 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+char* deserialize_packet(char *buffer, int *packet_size, int *file_size, char* file_name){
+
+    const char colon[2] = ":";
+
+    char *token;
+
+    token = strtok(buffer, colon);
+
+    *file_size = atoi(token);
+
+    token = strtok(NULL,colon);
+    token = strtok(NULL,colon);
+
+    *packet_size = atoi(token);
+
+    token = strtok(NULL,colon);
+
+    memcpy(file_name, token, strlen(token)+1);
+
+
+    token = strtok(NULL,colon);
+
+    char* data = malloc(*packet_size);
+
+    memcpy(data, token, *packet_size+1);
+
+    return data;
+    
+}
+
 int main(int argc, char *argv[])
 {
     int sockfd;
@@ -94,7 +124,7 @@ int main(int argc, char *argv[])
     int status;
     int numbytes;
     struct sockaddr_storage their_addr;
-    char buf[MAXBUFLEN];
+    uint8_t buf[MAXBUFLEN];
     socklen_t addr_len;
     char s[INET6_ADDRSTRLEN];
     char ip4[INET_ADDRSTRLEN];
@@ -148,7 +178,6 @@ int main(int argc, char *argv[])
     freeaddrinfo(servinfo);
 
     printf("server: waiting for message...\n");
-    
 
     //use their_addr (sockaddr_storage) since we do not know if client is using IPv4 or IPv6
     addr_len = sizeof their_addr;
@@ -157,18 +186,59 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
+    sendto(sockfd, "yes", strlen("yes"), 0, (struct sockaddr *)&their_addr, addr_len);
 
-    buf[numbytes] = '\0';
-    printf("message from client: \"%s\"\n", buf);
+    //printf("message from client: \"%s\"\n", buf);
 
-    if (strcmp(buf,ftp) == 0) {
+    int packet_size = 0;
+    int file_size = 0;
+    char file_name[100];
+    char* data = deserialize_packet(buf, &packet_size, &file_size, file_name);
+
+    // printf("Data: %s\n", data);
+    // printf("File Size: %d\n", file_size);
+    // printf("Packet Size: %d\n", packet_size);
+    //printf("File Name: %s\n", file_name);
+
+
+    char* packets_list[file_size];
+    int packet_sizes[file_size];
+
+    packets_list[0] = malloc(packet_size+1);
+    memcpy(packets_list[0],data, packet_size+1);
+    packet_sizes[0] = packet_size;
+
+    //printf("Data: %s\n", packets_list[0]);    
+
+    int i = 0;
+
+    for (i = 0; i < file_size-1; i++){
+        if ((numbytes = recvfrom(sockfd, buf, MAXBUFLEN-1 , 0, (struct sockaddr *)&their_addr, &addr_len)) == -1) {
+            perror("recvfrom");
+            exit(1);
+        }
+
+        char* data = deserialize_packet(buf, &packet_size, &file_size, file_name);
+        packets_list[i+1] = malloc(packet_size+1);
+        memcpy(packets_list[i+1],data, packet_size+1);
+        packet_sizes[i+1] = packet_size;
+
+        //printf("Data: %s\n", packets_list[i+1]); 
+
         sendto(sockfd, "yes", strlen("yes"), 0, (struct sockaddr *)&their_addr, addr_len);
+
     }
 
-    else {
-        sendto(sockfd, "no", strlen("no"), 0, (struct sockaddr *)&their_addr, addr_len);
+    FILE *file;
+
+    file = fopen(file_name, "wb");
+
+    for (i = 0; i < file_size; i++){
+
+        fwrite(packets_list[i], 1, packet_sizes[i], file);
+
     }
+    fclose (file);
 
     close(sockfd);
 

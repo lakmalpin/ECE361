@@ -38,46 +38,62 @@ int find_total_frag(long size)
     return (count/1000);
 }
 
+char* serialize_packet(uint8_t total_frag, uint8_t packet_count, int byte_count, char *filename, uint8_t *filedata, int *packet_size){
+    char packet[2000];
+    int packet_index;
+    int a = 0;
 
-char* create_packet(int total_frag, int frag_no, int size, char* filename, char* filedata){
+    memset(packet, 0, 2000);
 
-    char *t_f = (char*) malloc(sizeof(char));
-    char *f_n = (char*) malloc(sizeof(char));
-    char *s = (char*) malloc(sizeof(char));
-
-    char colon = ':';
-    size_t s_colon = sizeof(colon);
-
-    char *packet = (char*) malloc(3*sizeof(char) + 4*s_colon + strlen(filename) + size*(sizeof(size)));
-    packet[0] = '\0';
-
-    sprintf(t_f, "%d", total_frag);
-
-    // printf("T_F: %d\n",sizeof(*t_f));
-    // printf("F_N: %d\n",sizeof(*f_n));
-    // printf("S: %d\n",sizeof(*s));
-
-    sprintf(f_n, "%d", frag_no);
-    sprintf(s, "%d", size);
-  
-    strcat (packet, t_f);
-    strcat (packet, ":");
-    strcat (packet, f_n);
-    strcat (packet, ":");
-    strcat (packet, s);
-    strcat (packet, ":");
-    strcat (packet, filename);
-    strcat (packet, ":");
-    memcpy (packet + strlen(packet), filedata, sizeof(size)*size);
-
-    free(t_f);
-    free(f_n);
-    free(s);
+    packet_index = sprintf(packet, "%d", total_frag);
+    packet[packet_index] = ':';
+    packet_index ++;
+    packet_index = packet_index + sprintf(packet+packet_index, "%d", packet_count);
+    packet[packet_index] = ':';
+    packet_index++;
+    packet_index = packet_index + sprintf(packet+packet_index, "%d", byte_count);
+    packet[packet_index] = ':';
+    packet_index++;
     
-    printf("%s\n", packet);
+    for (a = 0; a < strlen(filename);a++){
+        packet[packet_index + a] = filename[a];
+    }
+    packet_index = packet_index + strlen(filename);
+    packet[packet_index] = ':';
+    packet_index++;
 
-    return packet;
-} 
+    // for (a = 0; a < (byte_count); a++){
+    //     memcpy (&packet[a+packet_index], &filedata[a], 1);
+    // }
+
+    memcpy (packet + packet_index, filedata, byte_count);
+
+    //printf("byte count: %d\n", byte_count);
+    //printf("packet_index: %d\n", packet_index);
+
+    packet_index = packet_index + byte_count;
+
+    //printf("final packet_index: %d\n", packet_index);
+    
+    char* return_packet = malloc(packet_index);
+    
+    memset(return_packet, 0, packet_index);
+
+    //return_packet = packet;
+
+    memcpy(return_packet, packet, packet_index+1);
+    
+    //printf("packet DATA: %s\n", return_packet);
+
+    *packet_size = packet_index;
+
+    memset(packet, 0, 2000);
+
+    //printf("Serialized Packet: %s\n", return_packet);
+
+    return return_packet;
+
+}
 
 int main(int argc, char *argv[])
 {
@@ -97,7 +113,7 @@ int main(int argc, char *argv[])
 
     int num_bytes = 0;
     int total_frag;
-    char filedata[PACKETSIZE];
+    uint8_t filedata[PACKETSIZE];
     int byte_count = 0;
     int packet_count = 1;
     
@@ -139,7 +155,7 @@ int main(int argc, char *argv[])
     filename[strlen(filename)-1] = '\0';
 
     FILE *file;
-    char *buffer;
+    uint8_t *buffer;
     long filelen;
 
     file = fopen(filename,"rb");
@@ -147,32 +163,49 @@ int main(int argc, char *argv[])
     filelen = ftell(file);
     rewind(file);
 
-    buffer = (char *)malloc(filelen * sizeof(char));
+    buffer = (uint8_t *)malloc(filelen * sizeof(uint8_t));
     fread(buffer, filelen, 1 ,file);
     fclose(file);
 
     total_frag = find_total_frag(filelen);
-    printf("Total Frag: %d\n",total_frag);
+    //printf("Total Frag: %d\n",total_frag);
 
-    //char* example_packet = create_packet(3,1,1000,"hello.txt","Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleifend tellus. Aenean leo ligula, porttitor eu, consequat vitae, eleifend ac, enim. Aliquam lorem ante, dapibus in, viverra quis, feugiat a, tellus. Phasellus viverra nulla ut metus varius laoreet. Quisque rutrum. Aenean imperdiet. Etiam ultricies nisi vel augue. Curabitur ullamcorper ultricies nisi. Nam eget dui. Etiam rhoncus. Maecenas tempus, tellus eget condimentum rhoncus, sem quam semper libero, sit amet adipiscing sem neque sed ipsum. N");
+    //printf("File length: %d\n", filelen);
 
-    //printf("Size of packet: %d\n", sizeof(example_packet));
-    //char* packets_list = malloc(total_frag*(3*sizeof(int)+4*sizeof(char)+strlen(filename)+1000*sizeof(char)));
+    long i;
+
+    for (i = 0; i < filelen; i++){
+        //printf("%d",buffer[i]);
+    }
+
     char* packets_list[total_frag];
+    
+
+    uint8_t test_total_frag = 2;
+    uint8_t test_packet_count = 2;
+    int test_byte_count = 250;
+
+    //char* x = serialize_packet(test_total_frag, test_packet_count, test_byte_count, filename, buffer);
+    //free(x);
+    
 
     int count = 0;
+    int packet_size = 0;
+    int packet_size_list[total_frag];
 
     for (count = 0; count < filelen; count ++){
         filedata[byte_count] = buffer[count];
         byte_count ++;
 
         if ((byte_count == PACKETSIZE) || (count == (filelen - 1))) {
-            //printf("File data: %s\n", filedata);
-            char *packet = create_packet(total_frag, packet_count, byte_count, filename, filedata);
-            packets_list[packet_count-1] = malloc (sizeof *packets_list[packet_count-1]);
-            packets_list[packet_count-1] = packet;
+            //printf("%s\n", filedata);
+            char* packet = serialize_packet(total_frag, packet_count, byte_count, filename, filedata, &packet_size);
+            packets_list[packet_count-1] = malloc (packet_size+1);
+            //packets_list[packet_count-1] = packet;
+            memcpy(packets_list[packet_count-1],packet, packet_size+1);
             memset(filedata, '\0', byte_count);
-            //printf("%s\n",packets_list[packet_count-1]);
+            packet_size_list[packet_count-1] = packet_size+1;
+            //printf("Packet Size List: %d\n",packet_size_list[packet_count-1]);
             byte_count = 0;
             packet_count ++;
         }
@@ -183,29 +216,28 @@ int main(int argc, char *argv[])
         
     //printf("%s\n",ftp);
 
-    int a = 0;
+    int a=0;
+    for (a = 0; a < total_frag; a++){
 
-    // for (a = 0; a < total_frag; a++){
+        if ((numbytes = sendto(sockfd, packets_list[a], packet_size_list[a], 0, p->ai_addr, p->ai_addrlen)) == -1) {
+            perror("talker: sendto");
+            exit(1);
+        }
 
-    //     if ((numbytes = sendto(sockfd, packets_list[a], strlen(packets_list[a]), 0, p->ai_addr, p->ai_addrlen)) == -1) {
-    //         perror("talker: sendto");
-    //         exit(1);
-    //     }
+        addr_len = sizeof their_addr;
+        if ((numbytes = recvfrom(sockfd, buf, MAXBUFLEN-1 , 0, (struct sockaddr *)&their_addr, &addr_len)) == -1) {
+            perror("recvfrom");
+            exit(1);
+        }
 
-    //     addr_len = sizeof their_addr;
-    //     if ((numbytes = recvfrom(sockfd, buf, MAXBUFLEN-1 , 0, (struct sockaddr *)&their_addr, &addr_len)) == -1) {
-    //         perror("recvfrom");
-    //         exit(1);
-    //     }
+        if (strcmp(buf,yes) == 0) {
+        printf("Packet %d Recieved! \n", a+1);
+        }
+        else {
+            return 1;
+        }
 
-    //     if (strcmp(buf,yes) == 0) {
-    //     printf("Acknowledgment Recieved! \n");
-    //     }
-    //     else {
-    //         return 1;
-    //     }
-
-    // }
+    }
     
     freeaddrinfo(servinfo);
     close(sockfd);
