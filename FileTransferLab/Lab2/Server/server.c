@@ -85,31 +85,63 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-char* deserialize_packet(char *buffer, int *packet_size, int *file_size, char* file_name){
+uint8_t* deserialize_packet(char *buffer, int *packet_size, int *file_size, char* file_name){
 
     const char colon[2] = ":";
 
-    char *token;
+    char *temp = buffer;
+    uint8_t *data = malloc(2000);
+    int data_index = 0;
+    int colon_count = 0;
+    int buffer_index = 0;
 
-    token = strtok(buffer, colon);
+    while (*buffer){
+        if (':'== *buffer){
+            
+            colon_count ++;
 
-    *file_size = atoi(token);
+            if (colon_count == 1){
+                *file_size = atoi(data);
+                memset(data, 0, 2000);
+                data_index = 0;
+            }
+            else if (colon_count == 2){
+                memset(data, 0, 2000);
+                data_index = 0;
+            }
+            else if (colon_count == 3){
+                *packet_size = atoi(data);
+                memset(data, 0, 2000);
+                data_index = 0;
+            }
+            else if (colon_count ==4){
+                memcpy(file_name, data, strlen(data)+1);
+                memset(data, 0, 2000);
+                data_index = 0;
+                buffer_index ++;
+                break;
+            }
+        }
 
-    token = strtok(NULL,colon);
-    token = strtok(NULL,colon);
+        else {
+            data[data_index] = *buffer;
+            data_index ++;
+        }
+        
+        buffer_index ++;
+        buffer++;
+    }
 
-    *packet_size = atoi(token);
+    buffer = temp;
 
-    token = strtok(NULL,colon);
+    memcpy(data,buffer + buffer_index, *packet_size);
 
-    memcpy(file_name, token, strlen(token)+1);
-
-
-    token = strtok(NULL,colon);
-
-    char* data = malloc(*packet_size);
-
-    memcpy(data, token, *packet_size+1);
+    // printf("pray to god: \n");
+    // int c;
+    // for (c = 0; c < *packet_size; c++){
+    //     printf("%02X",data[c]);
+    // }
+    // printf("\n");
 
     return data;
     
@@ -180,35 +212,31 @@ int main(int argc, char *argv[])
     printf("server: waiting for message...\n");
 
     //use their_addr (sockaddr_storage) since we do not know if client is using IPv4 or IPv6
+    //recieve first packet from client
     addr_len = sizeof their_addr;
     if ((numbytes = recvfrom(sockfd, buf, MAXBUFLEN-1 , 0, (struct sockaddr *)&their_addr, &addr_len)) == -1) {
         perror("recvfrom");
         exit(1);
     }
 
+    //send acknowledgment to client
     sendto(sockfd, "yes", strlen("yes"), 0, (struct sockaddr *)&their_addr, addr_len);
 
-    //printf("message from client: \"%s\"\n", buf);
-
+    //deserialize first packet and determine number of packets to come from header.
     int packet_size = 0;
     int file_size = 0;
     char file_name[100];
-    char* data = deserialize_packet(buf, &packet_size, &file_size, file_name);
-
-    // printf("Data: %s\n", data);
-    // printf("File Size: %d\n", file_size);
-    // printf("Packet Size: %d\n", packet_size);
-    //printf("File Name: %s\n", file_name);
-
+    uint8_t* data = deserialize_packet(buf, &packet_size, &file_size, file_name);
+    memset(buf, '\0', packet_size);
+    
+    printf("Packet 1 Recieved! \n");
 
     char* packets_list[file_size];
     int packet_sizes[file_size];
 
     packets_list[0] = malloc(packet_size+1);
     memcpy(packets_list[0],data, packet_size+1);
-    packet_sizes[0] = packet_size;
-
-    //printf("Data: %s\n", packets_list[0]);    
+    packet_sizes[0] = packet_size; 
 
     int i = 0;
 
@@ -219,11 +247,12 @@ int main(int argc, char *argv[])
         }
 
         char* data = deserialize_packet(buf, &packet_size, &file_size, file_name);
+        memset(buf, '\0', packet_size);
         packets_list[i+1] = malloc(packet_size+1);
         memcpy(packets_list[i+1],data, packet_size+1);
         packet_sizes[i+1] = packet_size;
 
-        //printf("Data: %s\n", packets_list[i+1]); 
+        printf("Packet %d Recieved! \n", i+2);
 
         sendto(sockfd, "yes", strlen("yes"), 0, (struct sockaddr *)&their_addr, addr_len);
 

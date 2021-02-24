@@ -10,6 +10,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #define MAXBUFLEN 100
 #define PACKETSIZE 1000
@@ -23,6 +24,7 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+//finds the total number of packets needed when total number of bytes are sent
 int find_total_frag(long size)
 {
     int count = 1000;
@@ -38,13 +40,14 @@ int find_total_frag(long size)
     return (count/1000);
 }
 
-char* serialize_packet(uint8_t total_frag, uint8_t packet_count, int byte_count, char *filename, uint8_t *filedata, int *packet_size){
-    char packet[2000];
+//returns the filedata and packetsize to the pointers sent in as parameters
+uint8_t* serialize_packet(uint8_t total_frag, uint8_t packet_count, int byte_count, char *filename, uint8_t *filedata, int *packet_size){
+    uint8_t packet[2000];
     int packet_index;
-    int a = 0;
 
     memset(packet, 0, 2000);
 
+    //first parts of the packets are integers, so sprintf can be used to append the packet
     packet_index = sprintf(packet, "%d", total_frag);
     packet[packet_index] = ':';
     packet_index ++;
@@ -55,41 +58,27 @@ char* serialize_packet(uint8_t total_frag, uint8_t packet_count, int byte_count,
     packet[packet_index] = ':';
     packet_index++;
     
+    //filename is a string and is appended by character
+    int a;
     for (a = 0; a < strlen(filename);a++){
         packet[packet_index + a] = filename[a];
     }
+
     packet_index = packet_index + strlen(filename);
     packet[packet_index] = ':';
     packet_index++;
 
-    // for (a = 0; a < (byte_count); a++){
-    //     memcpy (&packet[a+packet_index], &filedata[a], 1);
-    // }
-
     memcpy (packet + packet_index, filedata, byte_count);
-
-    //printf("byte count: %d\n", byte_count);
-    //printf("packet_index: %d\n", packet_index);
-
     packet_index = packet_index + byte_count;
-
-    //printf("final packet_index: %d\n", packet_index);
     
-    char* return_packet = malloc(packet_index);
-    
+    //create return packet with correct size
+    uint8_t* return_packet = malloc(packet_index); 
     memset(return_packet, 0, packet_index);
-
-    //return_packet = packet;
-
     memcpy(return_packet, packet, packet_index+1);
-    
-    //printf("packet DATA: %s\n", return_packet);
 
     *packet_size = packet_index;
 
     memset(packet, 0, 2000);
-
-    //printf("Serialized Packet: %s\n", return_packet);
 
     return return_packet;
 
@@ -116,6 +105,8 @@ int main(int argc, char *argv[])
     uint8_t filedata[PACKETSIZE];
     int byte_count = 0;
     int packet_count = 1;
+
+    struct timeval stop, start;
     
     if (argc != 3) {
         fprintf(stderr,"usage: talker hostname message\n");
@@ -147,7 +138,6 @@ int main(int argc, char *argv[])
         return 2;
     }
 
-     
     printf("Please input a message: ");
     fgets(userin,20,stdin);
     char *filename = strtok(userin, " ");
@@ -168,56 +158,34 @@ int main(int argc, char *argv[])
     fclose(file);
 
     total_frag = find_total_frag(filelen);
-    //printf("Total Frag: %d\n",total_frag);
-
-    //printf("File length: %d\n", filelen);
-
-    long i;
-
-    for (i = 0; i < filelen; i++){
-        //printf("%d",buffer[i]);
-    }
-
-    char* packets_list[total_frag];
-    
-
-    uint8_t test_total_frag = 2;
-    uint8_t test_packet_count = 2;
-    int test_byte_count = 250;
-
-    //char* x = serialize_packet(test_total_frag, test_packet_count, test_byte_count, filename, buffer);
-    //free(x);
-    
+    uint8_t* packets_list[total_frag];
 
     int count = 0;
     int packet_size = 0;
     int packet_size_list[total_frag];
 
+    //assemble packets in 1000 byte sequences and append to packets_list
     for (count = 0; count < filelen; count ++){
         filedata[byte_count] = buffer[count];
         byte_count ++;
 
         if ((byte_count == PACKETSIZE) || (count == (filelen - 1))) {
-            //printf("%s\n", filedata);
-            char* packet = serialize_packet(total_frag, packet_count, byte_count, filename, filedata, &packet_size);
+            
+            uint8_t* packet = serialize_packet(total_frag, packet_count, byte_count, filename, filedata, &packet_size);
             packets_list[packet_count-1] = malloc (packet_size+1);
-            //packets_list[packet_count-1] = packet;
             memcpy(packets_list[packet_count-1],packet, packet_size+1);
             memset(filedata, '\0', byte_count);
             packet_size_list[packet_count-1] = packet_size+1;
-            //printf("Packet Size List: %d\n",packet_size_list[packet_count-1]);
+
             byte_count = 0;
             packet_count ++;
         }
     }
 
-    
-    char *protocol_type = strtok(userin, " ");
-        
-    //printf("%s\n",ftp);
-
     int a=0;
     for (a = 0; a < total_frag; a++){
+
+        gettimeofday(&start, NULL);
 
         if ((numbytes = sendto(sockfd, packets_list[a], packet_size_list[a], 0, p->ai_addr, p->ai_addrlen)) == -1) {
             perror("talker: sendto");
@@ -230,8 +198,12 @@ int main(int argc, char *argv[])
             exit(1);
         }
 
+        gettimeofday(&stop, NULL);
+
+
         if (strcmp(buf,yes) == 0) {
-        printf("Packet %d Recieved! \n", a+1);
+            printf("Packet %d Sent Successfully! \n", a+1);
+            printf("RTT: %lu ms\n", (stop.tv_sec - start.tv_sec) * 1000 + stop.tv_usec - start.tv_usec);
         }
         else {
             return 1;
