@@ -16,6 +16,7 @@
 /*
 
 ip addr - get ip address of ug machine
+128.100.13.250
 
 //used to prep the socket address structure for subsequent use
 
