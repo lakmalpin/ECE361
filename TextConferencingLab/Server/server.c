@@ -22,6 +22,28 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+void process_user_message(char *buf)
+{
+    (void *)buf;
+
+    /*
+    get command from user message (buf)
+
+    if (command == "login"){
+        verify_login(command,x,y...) <- x,y any data structures you need to modify
+    }
+    else if (command == "logout"){
+        logout(...)
+    }
+    .
+    .
+    .
+    **everyfunction except for verify_login needs to make sure the messaging client is logged into the server already
+    **some of these functions need to send an ack or nack back to the sending user
+
+    */
+}
+
 int main(void)
 {
     fd_set master;    // master file descriptor list
@@ -156,8 +178,8 @@ int main(void)
                         close(i); // bye!
                         FD_CLR(i, &master); // remove from master set
                     } else {
-                        // we got some data from a client
-                        printf("Data: %s\n", &buf);
+                        process_user_message(buf);
+                        printf("Data: %s\n", buf);
                         for(j = 0; j <= fdmax; j++) {
                             // send to everyone!
                             if (FD_ISSET(j, &master)) {

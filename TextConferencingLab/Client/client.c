@@ -21,69 +21,107 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-void produce_message(char *user_in, char *buf, char *store_user_id, int *logged_in)
+void produce_message(char *user_in, char *buf, char *store_user_id)
 {
-    
     memset(buf,0,strlen(buf));
     
     char temp[200];
     char data_seg[100];
     strcpy(temp, user_in);
-    //printf("temp: %s\n", temp);
+
+    //Tokenize user input by spaces
     char *ptr;
     ptr = strtok(temp, " ");
-    strcpy(data_seg, ptr);
-    printf("user_in: %s\n", user_in);
 
-    //printf("%d\n",strcmp(ptr,"logout\n"));
-    //have to allocate memory in order to use strcmp on the string ptr
+    //copy first user text segment to data_Seg
+    strcpy(data_seg, ptr);
 
     if (strcmp(user_in, "logout\n") == 0 || strcmp(user_in, "leavesession\n") == 0 || strcmp(user_in, "list\n") == 0 || strcmp(user_in, "quit\n") == 0){
-        printf("enter first loop\n");
-        if (*logged_in == 0){
-            if (strcmp(user_in, "logout\n") == 0){
-                //printf("here!!");
-                char *type = "logout";
-                char *size = "0";
-
-                strncat(buf, type, strlen(type));
-                strncat(buf,":", 2);
-                strncat(buf, size, strlen(size));
-                strncat(buf, ":", 2);
-                strncat(buf, store_user_id, strlen(store_user_id));
-                strncat(buf, ":", 2);
-                strncat(buf, "0", 2);
-            }
+        
+        
+        char *type;
+        if (strcmp(user_in, "logout\n") == 0){
+            type = "logout";
         }
-        else{
-            printf("Sorry, Not logged in\n");
+        else if (strcmp(user_in, "leavesession\n") == 0){
+            type = "leavesession";
         }
+        else if (strcmp(user_in, "list\n") == 0){
+            type = "list";
+        }
+        else if (strcmp(user_in, "quit\n") == 0){
+            type = "quit";
+        }
+        
+        strncat(buf, type, strlen(type));
+        strncat(buf,":", 2);
+        strncat(buf, "0", 2);
+        strncat(buf, ":", 2);
+        strncat(buf, store_user_id, strlen(store_user_id));
+        strncat(buf, ":", 2);
+        strncat(buf, "0", 2);
     }
-    else if(strcmp(data_seg, "login") == 0 || strcmp(data_seg, "joinsession") == 0 || strcmp(data_seg, "craetesession") == 0)
+
+    else if(strcmp(data_seg, "login") == 0 || strcmp(data_seg, "joinsession") == 0 || strcmp(data_seg, "createsession") == 0)
     {
-        printf("enter second loop\n");
+        char *type;
+        char *data;
+        char size[10];
+
         if (strcmp(data_seg,"login") == 0){
-            char *type = ptr;
+            type = ptr;
             ptr = strtok(NULL," ");
             char userid[50];
             strcpy(userid, ptr);
             strcpy(store_user_id, userid);
             ptr = strtok (NULL, " ");
-            char *pass = ptr;
-            char size[10];
-            sprintf(size, "%d", strlen(pass) - 1);
-            
-            strncat(buf, type, strlen(type));
-            strncat(buf,":", 2);
-            strncat(buf, size, strlen(size));
-            strncat(buf, ":", 2);
-            strncat(buf, userid, strlen(userid));
-            strncat(buf, ":", 2);
-            strncat(buf, pass, strlen(pass));
+            data = ptr;
+            sprintf(size, "%d", strlen(data) - 1);
+
         }
+
+        else if (strcmp(data_seg,"joinsession") == 0){
+            type = ptr;
+            ptr = strtok(NULL," ");
+            data = ptr;
+            sprintf(size, "%d", strlen(data) - 1);
+
+        }
+
+        else if (strcmp(data_seg,"createsession") == 0){
+            type = ptr;
+            ptr = strtok(NULL," ");
+            data = ptr;
+            sprintf(size, "%d", strlen(data) - 1);
+
+        }
+        
+
+        strncat(buf, type, strlen(type));
+        strncat(buf,":", 2);
+        strncat(buf, size, strlen(size));
+        strncat(buf, ":", 2);
+        strncat(buf, store_user_id, strlen(store_user_id));
+        strncat(buf, ":", 2);
+        strncat(buf, data, strlen(data));
+
     }
 
-    //printf("seg not here");
+    else{
+        char *data;
+        char size[10];
+        data = user_in;
+        sprintf(size, "%d", strlen(data) - 1);
+
+        strncat(buf, "message", 8);
+        strncat(buf,":", 2);
+        strncat(buf, size, strlen(size));
+        strncat(buf, ":", 2);
+        strncat(buf, store_user_id, strlen(store_user_id));
+        strncat(buf, ":", 2);
+        strncat(buf, data, strlen(data));
+    }
+
 }
 
 int main(int argc, char *argv[])
@@ -201,9 +239,7 @@ int main(int argc, char *argv[])
                 if (i == fd_stdin){
                     memset(user_in,0,strlen(user_in));
                     int read_bytes = read(i, user_in, MAXBYTES);
-                    //printf("USEr IN: %s\n", user_in);
-                    produce_message(user_in, buf, store_user_id, &logged_in);
-                    //printf("User id: %s\n", userid);
+                    produce_message(user_in, buf, store_user_id);
                     if(send(listener, (char*)buf, sizeof(buf), 0) == -1){
                         perror("send");
                     }
