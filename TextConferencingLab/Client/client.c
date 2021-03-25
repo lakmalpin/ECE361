@@ -50,7 +50,7 @@ void produce_message(char *user_in, char *buf, char *store_user_id)
             type = "list";
         }
         else if (strcmp(user_in, "quit\n") == 0){
-            type = "quit";
+            return;
         }
         
         strncat(buf, type, strlen(type));
@@ -69,14 +69,24 @@ void produce_message(char *user_in, char *buf, char *store_user_id)
         char size[10];
 
         if (strcmp(data_seg,"login") == 0){
+            char pass_ip_port[100];
             type = ptr;
             ptr = strtok(NULL," ");
             char userid[50];
             strcpy(userid, ptr);
             strcpy(store_user_id, userid);
             ptr = strtok (NULL, " ");
-            data = ptr;
-            sprintf(size, "%d", strlen(data) - 1);
+            strcpy(pass_ip_port, ptr);
+            strcat(pass_ip_port, ":");
+            ptr = strtok (NULL, " ");
+            strcat(pass_ip_port, ptr);
+            strcat(pass_ip_port, ":");
+            ptr = strtok (NULL, " ");
+            strcat(pass_ip_port, ptr);
+            strcat(pass_ip_port, ":");
+            //printf("data: %s\n", pass_ip_port);
+            data = pass_ip_port;
+            sprintf(size, "%d", strlen(pass_ip_port) - 1);
 
         }
 
@@ -239,6 +249,9 @@ int main(int argc, char *argv[])
                 if (i == fd_stdin){
                     memset(user_in,0,strlen(user_in));
                     int read_bytes = read(i, user_in, MAXBYTES);
+                    if (strcmp(user_in, "quit\n")==0){
+                        return 0;
+                    }
                     produce_message(user_in, buf, store_user_id);
                     if(send(listener, (char*)buf, sizeof(buf), 0) == -1){
                         perror("send");
