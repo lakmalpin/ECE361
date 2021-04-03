@@ -16,111 +16,122 @@
 
 #define PORT "9035"   // port we're listening on
 
+/*
+Fix command message vs. regular message
+Fix - you can createsession with same name
+List: Should list which session the clients are in.
+Quit: something abt this I forgot what we need to fix.
+Additional Feature 1: client can join multiple sessions
+Additional Feature 2: Client timeout after some time
+
+
+*/
+
 struct user{
 
-  char* username;
-  char* ip; //might not need
-  char* port; //might not need
-  int fd;
-  int sess_id;
-  struct user* next;
+    char* username;
+    char* ip; //might not need
+    char* port; //might not need
+    int fd;
+    int sess_id;
+    struct user* next;
 
 };
 
 struct online{
 
-  struct user* head;
-  //struct session* sessions;
-  int size;
+    struct user* head;
+    //struct session* sessions;
+    int size;
   
 };
 
 struct actives{
 
-  int sess_id;
-  int fd;
- 
+    int sess_id;
+    int fd;
+
 };
 
 struct session{
   
-  struct actives* users;//max possible sessions = 10, 10 users max for each
-  int sess_id;
-  int active;
-  int size;
-  char* name;
+    struct actives* users;//max possible sessions = 10, 10 users max for each
+    int sess_id;
+    int active;
+    int size;
+    char* name;
+
 };
 
 struct online* onlineq;
 struct session* sessq;
-//struct active_sess* actq;
 
 void enqueue(struct user* enter, struct online* onlineq){
                                                                                                              
-  struct user* old_head = onlineq->head;
+    struct user* old_head = onlineq->head;
 
-  if(onlineq->head == NULL){
-    onlineq->head = enter;
-    enter->next = NULL;
-    onlineq->size= 1;                                                                                                                    
-    return;
-  }
+    if(onlineq->head == NULL){
+        onlineq->head = enter;
+        enter->next = NULL;
+        onlineq->size= 1;                                                                                                                    
+        return;
+    }
 
-  if(old_head->next == NULL){
-    old_head->next = enter;
-    enter->next = NULL;
-    onlineq->size = 2;                                                                                                                    
-    return;
-  }
-
-    while(old_head!= NULL){
-
-      if(old_head->next == NULL){
+    if(old_head->next == NULL){
         old_head->next = enter;
         enter->next = NULL;
-        onlineq->size+=1;                                                                                                                   
+        onlineq->size = 2;                                                                                                                    
         return;
-      }
-
-      old_head = old_head->next;
     }
-}
 
+      while(old_head!= NULL){
 
-void dequeue(struct user* leave, struct online* onlineq){
+          if(old_head->next == NULL){
+              old_head->next = enter;
+              enter->next = NULL;
+              onlineq->size+=1;                                                                                                                   
+              return;
+          }
 
-  if(leave == NULL) return;
-
-  struct user* find = onlineq->head;
-
-  //only one element                                                                                                                              
-  if(find->next == NULL){
-    onlineq->head = onlineq->head->next;
-    return;
+          old_head = old_head->next;
+      }
   }
 
-  //head of queue                                                                                                                                 
-  if(onlineq->head->username == leave->username){
-    onlineq->head = onlineq->head->next;
-    find->next= NULL;
-    onlineq->size-=1;
-    return;
-  }
 
-  else{
-    struct user*prev;
-    //for specific one that is not the head                                                                                                       
-    while(find != NULL){
-      if(find->username == leave->username){
-        prev->next = find->next;
-        find->next = NULL;
+  void dequeue(struct user* leave, struct online* onlineq){
+
+    if(leave == NULL) return;
+
+    struct user* find = onlineq->head;
+
+    //only one element                                                                                                                              
+    if(find->next == NULL){
+        onlineq->head = onlineq->head->next;
+        return;
+    }
+
+    //head of queue                                                                                                                                 
+    if(onlineq->head->username == leave->username){
+        onlineq->head = onlineq->head->next;
+        find->next= NULL;
         onlineq->size-=1;
         return;
-      }
-      prev = find;
-      find = find->next;
-    }                                                                                                                  
-  }
+    }
+
+    else{
+        struct user*prev;
+        //for specific one that is not the head                                                                                                       
+        while(find != NULL){
+            if(find->username == leave->username){
+                prev->next = find->next;
+                find->next = NULL;
+                onlineq->size-=1;
+                return;
+            }
+            prev = find;
+            find = find->next;
+        }                                                                                                                  
+    }
                                                                                                                                     
 }
 
@@ -169,21 +180,6 @@ void *get_in_addr(struct sockaddr *sa)
 
 void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq, struct session* sessq)
 {
-  //printf("Buffer: %s\n", buf);   
-    /*
-    get command from user message (buf)
-    if (command == "login"){
-        verify_login(command,x,y...) <- x,y any data structures you need to modify
-    }
-    else if (command == "logout"){
-        logout(...)
-    }
-    .
-    .
-    .
-    **everyfunction except for verify_login needs to make sure the messaging client is logged into the server already
-    **some of these functions need to send an ack or nack back to the sending user
-    */
 
   char userIDs [3][10] = {
         "user1",
@@ -205,7 +201,7 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
   strcpy(com,command);
   char* type = strtok(NULL,":");
 
-  if(strcmp(com,"login") == 0){
+  if(strcmp(com,"/login") == 0){
     
     char* log = strtok(NULL,":");
     char logstr[50];
@@ -300,11 +296,11 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
     }  
   }
   
-  else if(strcmp(com,"quit") == 0){
-    //should put in the main OR might not implement here
+  // else if(strcmp(com,"/quit") == 0){
+  //   //should put in the main OR might not implement here
 
-    //should use close() function
-  }
+  //   //should use close() function
+  // }
 
   else{
 
@@ -331,28 +327,12 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
       return;
     }  //if tou get an error its prolly this
     
-    if(strcmp(com,"createsession") == 0){
+    if(strcmp(com,"/createsession") == 0){
     
       char* sess_id = strtok(NULL,":");
       sess_id = strtok(NULL,":");
-     
-      // for(int i =0;i<strlen(sess_id);i++){
-      //   if(isspace(sess_id[i]) > 0){ 
-      //     sess_id[i]='\0';
-      //     break;
-      //   }
-      // }
-
-      // int id = atoi(sess_id);
-      // if(id < 0 || id > 9){
-      //   char* message = "Can only create sessions with ids between 0-19\n";
-      //   send(fds,message,strlen(message),0);
-      //   return;
-      // }
-
-      //is it available?
-
-      //struct session* sess_new = (struct session*)malloc(sizeof(struct session));
+      sess_id = strdup(sess_id);
+      sess_id[strcspn(sess_id, "\n")] = 0;
 
       if (curr->sess_id != -1)
       {
@@ -364,23 +344,24 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
       int counter = 0;
       while(counter < 10) 
       {
-        if(sessq[counter].name == sess_id)
+        if (sessq[counter].name != NULL)
         {
-            char*message = "Session already in use\n";
-            send(fds,message,strlen(message),0);
-            return;
+          if(strcmp(sessq[counter].name,sess_id) == 0)
+          {
+              char*message = "Session already in use\n";
+              send(fds,message,strlen(message),0);
+              return;
+          }
         }
         else
         {
           if (sessq[counter].active == 0)
           {
-              sessq[counter].name = strdup(sess_id);
-              //sessq[counter].name[strcspn(sessq[counter].name, "\n")] = 0;
+              sessq[counter].name = sess_id;
               sessq[counter].users[0].fd = curr->fd;
               sessq[counter].active = 1;
               sessq[counter].size++;
               curr->sess_id = counter;
-
               char message[27];
               sprintf(message,"You have joined session %s\n",sess_id);
               send(fds,message,strlen(message),0);
@@ -390,6 +371,7 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
 
         counter++;
       }
+
       char*message = "No sessions available\n";
       send(fds,message,strlen(message),0);
       return;
@@ -408,7 +390,7 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
       
     } 
 
-    else if(strcmp(com,"joinsession") == 0){
+    else if(strcmp(com,"/joinsession") == 0){
     
       char* sess_id = strtok(NULL,":");
       sess_id = strtok(NULL,":");
@@ -420,15 +402,15 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
       {
         if (sessq[counter].name != NULL){
           if(strcmp(sessq[counter].name, sess_id) == 0 && sessq[counter].size != 10 && sessq[counter].active == 1){
-              for(int i =0;i<10;i++){
-                if(sessq[counter].users[i].fd == -1){
-                  sessq[counter].users[i].fd = fds;
-                  sessq[counter].size++;
-                  curr->sess_id = counter;
-                  char* message = "Joined session\n";
-                  send(fds,message,strlen(message),0);
-                  return;
-                }
+              for(int i = 0; i < 10; i++){
+                  if(sessq[counter].users[i].fd == -1){
+                      sessq[counter].users[i].fd = fds;
+                      sessq[counter].size++;
+                      curr->sess_id = counter;
+                      char* message = "Joined session\n";
+                      send(fds,message,strlen(message),0);
+                      return;
+                  }
               }
           }
         }
@@ -440,34 +422,8 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
       return;  
     }
 
-    else if(strcmp(com,"leavesession") == 0){
+    else if(strcmp(com,"/leavesession") == 0){
 
-      // char* sess_id = strtok(NULL,":");
-      // sess_id = strtok(NULL,":");
-
-      // int id = atoi(sess_id);
-      // if(id > 9 || id < 0){
-      //   char* message = "Can only leave sessions with ids between 0-9\n";
-      //   send(fds,message,strlen(message),0);
-      //   return;
-      // }
-
-      
-      // for(int i =0;i<10;i++){
-
-      //   if(sessq[id].users[i].fd == fds){
-      //     found = 1;
-      //     sessq[id].users[i].fd = -1;
-      //     sessq[id].size--;
-          
-      //     if(sessq[id].size == 0){
-      //       sessq[id].active = 0;
-      //     }
-          
-      //     curr->sess_id = -1;
-      //     break;
-      //   }
-      // }
       int id = curr->sess_id;
 
       if(curr->sess_id != -1){
@@ -499,11 +455,14 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
       
     }
 
-    else if(strcmp(com,"list") == 0){
+    else if(strcmp(com,"/list") == 0){
 
 
       struct user* head = onlineq->head;
-      char message[1000] = "Clients online: ";
+      char message[1000];
+      memset(message, 0, 1000);
+
+      strcpy(message, "Clients online: ");
 
       char users[500];
       while(head!=NULL){
@@ -516,17 +475,20 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
 
 
       char sessions[250];
+      memset(sessions, 0, 250);
       for(int i =0;i<10;i++){
         if(sessq[i].active == 1 && sessq[i].size < 10){
           sprintf(sessions," %s, ",sessq[i].name);
           strcat(message,sessions);
+          memset(sessions, 0, 250);
+          
         }
       }
       send(fds, message, strlen(message),0);
       return;
     }
 
-    else if(strcmp(com,"logout") == 0){
+    else if((strcmp(com,"/logout") == 0) || (strcmp(com,"/quit") == 0)){
 
       //if in session leave
       
@@ -734,11 +696,8 @@ int main(void)
                     // handle data from a client
                     if ((nbytes = recv(i, buf, sizeof buf, 0)) <= 0) {
                         // got error or connection closed by client
-                        if (nbytes == 0) {
-                            // connection closed
+                        if (nbytes != 0) {
                             printf("Text Conferencing Server: socket %d Quit\n", i);
-                        } else {
-                            perror("recv");
                         }
                         close(i); // bye!
                         FD_CLR(i, &master); // remove from master set

@@ -21,7 +21,7 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-void produce_message(char *user_in, char *buf, char *store_user_id)
+void produce_message(char *user_in, char *buf, char *store_user_id, int *retval)
 {
     memset(buf,0,strlen(buf));
     
@@ -36,22 +36,22 @@ void produce_message(char *user_in, char *buf, char *store_user_id)
     //copy first user text segment to data_Seg
     strcpy(data_seg, ptr);
 
-    if (strcmp(user_in, "logout\n") == 0 || strcmp(user_in, "leavesession\n") == 0 || strcmp(user_in, "list\n") == 0 || strcmp(user_in, "quit\n") == 0){
+    if (strcmp(user_in, "/logout") == 0 || strcmp(user_in, "/leavesession") == 0 || strcmp(user_in, "/list") == 0 || strcmp(user_in, "/quit") == 0){
         
         
         char *type;
-        if (strcmp(user_in, "logout\n") == 0){
-            type = "logout";
+        if (strcmp(user_in, "/logout") == 0){
+            type = "/logout";
         }
-        else if (strcmp(user_in, "leavesession\n") == 0){
-            type = "leavesession";
+        else if (strcmp(user_in, "/leavesession") == 0){
+            type = "/leavesession";
         }
-        else if (strcmp(user_in, "list\n") == 0){
-            type = "list";
+        else if (strcmp(user_in, "/list") == 0){
+            type = "/list";
         }
-        else if (strcmp(user_in, "quit\n") == 0){
-            return;
-        }
+        // else if (strcmp(user_in, "/quit") == 0){
+        //     return;
+        // }
         
         strncat(buf, type, strlen(type));
         strncat(buf,":", 2);
@@ -62,23 +62,37 @@ void produce_message(char *user_in, char *buf, char *store_user_id)
         strncat(buf, "0", 2);
     }
 
-    else if(strcmp(data_seg, "login") == 0 || strcmp(data_seg, "joinsession") == 0 || strcmp(data_seg, "createsession") == 0)
+    else if(strcmp(data_seg, "/login") == 0 || strcmp(data_seg, "/joinsession") == 0 || strcmp(data_seg, "/createsession") == 0)
     {
         char *type;
         char *data;
         char size[10];
 
-        if (strcmp(data_seg,"login") == 0){
+        
+
+        if (strcmp(data_seg,"/login") == 0){
             char pass_ip_port[100];
             type = ptr;
             ptr = strtok(NULL," ");
+            if (ptr == NULL){
+                *retval = 1;
+                return;
+            }
             char userid[50];
             strcpy(userid, ptr);
             strcpy(store_user_id, userid);
             ptr = strtok (NULL, " ");
+            if (ptr == NULL){
+                *retval = 1;
+                return;
+            }
             strcpy(pass_ip_port, ptr);
             strcat(pass_ip_port, ":");
             ptr = strtok (NULL, " ");
+            if (ptr == NULL){
+                *retval = 1;
+                return;
+            }
             strcat(pass_ip_port, ptr);
             strcat(pass_ip_port, ":");
             ptr = strtok (NULL, " ");
@@ -90,17 +104,27 @@ void produce_message(char *user_in, char *buf, char *store_user_id)
 
         }
 
-        else if (strcmp(data_seg,"joinsession") == 0){
+        else if (strcmp(data_seg,"/joinsession") == 0){
             type = ptr;
             ptr = strtok(NULL," ");
+            if (ptr == NULL){
+                *retval = 1;
+                return;
+            }
             data = ptr;
             sprintf(size, "%d", strlen(data) - 1);
 
         }
 
-        else if (strcmp(data_seg,"createsession") == 0){
+        else if (strcmp(data_seg,"/createsession") == 0){
             type = ptr;
+            //printf("--%s\n", ptr);
             ptr = strtok(NULL," ");
+            if (ptr == NULL){
+                //printf("--%s\n", ptr);
+                *retval = 1;
+                return;
+            }
             data = ptr;
             sprintf(size, "%d", strlen(data) - 1);
 
@@ -123,7 +147,7 @@ void produce_message(char *user_in, char *buf, char *store_user_id)
         data = user_in;
         sprintf(size, "%d", strlen(data) - 1);
 
-        strncat(buf, "message", 8);
+        strncat(buf, "/message", 9);
         strncat(buf,":", 2);
         strncat(buf, size, strlen(size));
         strncat(buf, ":", 2);
@@ -153,6 +177,7 @@ int main(int argc, char *argv[])
     char buf[256];    // buffer for client data
     int nbytes;
     int logged_in = 0;
+    int retval = 0;
 
     char remoteIP[INET6_ADDRSTRLEN];
 
@@ -249,12 +274,21 @@ int main(int argc, char *argv[])
                 if (i == fd_stdin){
                     memset(user_in,0,strlen(user_in));
                     int read_bytes = read(i, user_in, MAXBYTES);
-                    if (strcmp(user_in, "quit\n")==0){
+                    if (strcmp(user_in, "/quit\n")==0){
+                        if(send(listener, "/quit", sizeof("/quit"), 0) == -1){
+                            perror("send");
+                        }
                         return 0;
                     }
-                    produce_message(user_in, buf, store_user_id);
-                    if(send(listener, (char*)buf, sizeof(buf), 0) == -1){
-                        perror("send");
+                    user_in[strcspn(user_in, "\n")] = 0;
+                    produce_message(user_in, buf, store_user_id, &retval);
+                    if (retval){
+                        printf("Error: Not a valid command.\n");
+                    }
+                    else{
+                        if(send(listener, (char*)buf, sizeof(buf), 0) == -1){
+                            perror("send");
+                        }
                     }
                 }
                 else{
