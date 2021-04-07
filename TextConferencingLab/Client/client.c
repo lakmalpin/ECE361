@@ -36,16 +36,18 @@ void produce_message(char *user_in, char *buf, char *store_user_id, int *retval)
     //copy first user text segment to data_Seg
     strcpy(data_seg, ptr);
 
-    if (strcmp(user_in, "/logout") == 0 || strcmp(user_in, "/leavesession") == 0 || strcmp(user_in, "/list") == 0 || strcmp(user_in, "/quit") == 0){
+    if (strcmp(user_in, "/logout") == 0 ||/* strcmp(user_in, "/leavesession") == 0 ||*/ strcmp(user_in, "/list") == 0 || strcmp(user_in, "/quit") == 0){
         
         
         char *type;
         if (strcmp(user_in, "/logout") == 0){
             type = "/logout";
         }
+	/*
         else if (strcmp(user_in, "/leavesession") == 0){
             type = "/leavesession";
         }
+	*/
         else if (strcmp(user_in, "/list") == 0){
             type = "/list";
         }
@@ -60,10 +62,10 @@ void produce_message(char *user_in, char *buf, char *store_user_id, int *retval)
         strncat(buf, store_user_id, strlen(store_user_id));
         strncat(buf, ":", 2);
         strncat(buf, "0", 2);
+        *retval = 0;
     }
 
-    else if(strcmp(data_seg, "/login") == 0 || strcmp(data_seg, "/joinsession") == 0 || strcmp(data_seg, "/createsession") == 0)
-    {
+    else if(strcmp(data_seg, "/login") == 0 || strcmp(data_seg, "/joinsession") == 0 || strcmp(data_seg,"/leavesession") == 0 || strcmp(data_seg, "/createsession") == 0){
         char *type;
         char *data;
         char size[10];
@@ -129,7 +131,17 @@ void produce_message(char *user_in, char *buf, char *store_user_id, int *retval)
             sprintf(size, "%d", strlen(data) - 1);
 
         }
-        
+
+        else if(strcmp(data_seg,"/leavesession")==0){
+        type = ptr;
+        ptr = strtok(NULL," ");
+        if(ptr == NULL){
+            *retval = 1;
+            return;
+        }
+        data = ptr;
+        sprintf(size,"%d",strlen(data)-1);
+        }
 
         strncat(buf, type, strlen(type));
         strncat(buf,":", 2);
@@ -138,6 +150,7 @@ void produce_message(char *user_in, char *buf, char *store_user_id, int *retval)
         strncat(buf, store_user_id, strlen(store_user_id));
         strncat(buf, ":", 2);
         strncat(buf, data, strlen(data));
+        *retval = 0;
 
     }
 
@@ -154,6 +167,7 @@ void produce_message(char *user_in, char *buf, char *store_user_id, int *retval)
         strncat(buf, store_user_id, strlen(store_user_id));
         strncat(buf, ":", 2);
         strncat(buf, data, strlen(data));
+        *retval = 0;
     }
 
 }
@@ -175,6 +189,7 @@ int main(int argc, char *argv[])
     char store_user_id[50];
     char user_in[256]; //buffer for client input
     char buf[256];    // buffer for client data
+    char idle_message[55] = "You have been kicked from the server due to inactivity";
     int nbytes;
     int logged_in = 0;
     int retval = 0;
@@ -296,6 +311,11 @@ int main(int argc, char *argv[])
                     memset(buf,0,strlen(buf));
                     int ret = recv(listener,(char*)buf, sizeof(buf),0);
                     printf("Server: %s\n", buf);
+                    if(strcmp(buf, idle_message) == 0){
+                        send(listener, "/quit", sizeof("/quit"), 0);
+                        memset(buf,0,strlen(buf));
+                        return 0;
+                    }
                     memset(buf,0,strlen(buf));
                     break;
                 }

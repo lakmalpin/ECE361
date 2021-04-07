@@ -35,6 +35,7 @@ struct user{
     int fd;
     int sess_id;
     struct user* next;
+    //struct timeval RTTstart, RTTstop;
 
 };
 
@@ -50,7 +51,7 @@ struct actives{
 
     int sess_id;
     int fd;
-
+    char* name;
 };
 
 struct session{
@@ -243,6 +244,7 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
         new_user->sess_id = -1;
         new_user->ip = strdup(ipstr);
         new_user->next = NULL;
+        //gettimeofday(&(new_user->RTTstart), NULL);
         enqueue(new_user, onlineq);
         char*message = "Successfully logged in\n";
         send(fds,message,strlen(message),0);
@@ -278,6 +280,7 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
         new_user->sess_id = -1;
         new_user->ip = strdup(ipstr);
         new_user->next = NULL;
+        //gettimeofday(&(new_user->RTTstart), NULL);
         enqueue(new_user, onlineq);
         char*message = "Successfully logged in\n";
         if(send(fds,message,strlen(message),0) == -1){
@@ -329,18 +332,30 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
     
     if(strcmp(com,"/createsession") == 0){
     
+      // gettimeofday(&(curr->RTTstop), NULL);
+      // unsigned long idletime = (curr->RTTstop.tv_sec - curr->RTTstart.tv_sec);
+      
+      // if (idletime >= 60)
+      // {
+      //       char*message = "You have been kicked due to inactivity. Please login in again.\n";
+      //       send(fds,message,strlen(message),0);
+      //       return; 
+      // }
+
       char* sess_id = strtok(NULL,":");
       sess_id = strtok(NULL,":");
       sess_id = strdup(sess_id);
       sess_id[strcspn(sess_id, "\n")] = 0;
 
+      /*
       if (curr->sess_id != -1)
       {
         char*message = "You are already in a session. Please leave session first.\n";
         send(fds,message,strlen(message),0);
         return;
       }
-
+      */
+      
       int counter = 0;
       while(counter < 10) 
       {
@@ -350,6 +365,7 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
           {
               char*message = "Session already in use\n";
               send(fds,message,strlen(message),0);
+              //gettimeofday(&(curr->RTTstart), NULL);
               return;
           }
         }
@@ -359,12 +375,14 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
           {
               sessq[counter].name = sess_id;
               sessq[counter].users[0].fd = curr->fd;
+	            strcpy(sessq[counter].users[0].name,curr->username);
               sessq[counter].active = 1;
               sessq[counter].size++;
               curr->sess_id = counter;
               char message[27];
               sprintf(message,"You have joined session %s\n",sess_id);
               send(fds,message,strlen(message),0);
+              //gettimeofday(&(curr->RTTstart), NULL);
               return;
           }
         }
@@ -374,6 +392,7 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
 
       char*message = "No sessions available\n";
       send(fds,message,strlen(message),0);
+      //gettimeofday(&(curr->RTTstart), NULL);
       return;
       
 
@@ -393,7 +412,7 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
     else if(strcmp(com,"/joinsession") == 0){
     
       char* sess_id = strtok(NULL,":");
-      sess_id = strtok(NULL,":");
+      sess_id = strtok(NULL,":");  
       
 
       int counter = 0;
@@ -403,8 +422,24 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
         if (sessq[counter].name != NULL){
           if(strcmp(sessq[counter].name, sess_id) == 0 && sessq[counter].size != 10 && sessq[counter].active == 1){
               for(int i = 0; i < 10; i++){
+                  if (strcmp(sessq[counter].users[i].name,curr->username) == 0)
+                  {
+                      //printf("sess name: %s\n", sessq[counter].users[i].name);
+                      //printf("username: %s\n", curr->username);
+                      if (counter == curr->sess_id){
+                          char* message = "You are already in this session.\n";
+                          send(fds,message,strlen(message),0);
+                          return;
+                      }
+                      curr->sess_id = counter; 
+                      char* message = "Rejoined Session\n";
+                      send(fds,message,strlen(message),0);
+                      return;
+                  }
                   if(sessq[counter].users[i].fd == -1){
                       sessq[counter].users[i].fd = fds;
+		                  memset(sessq[counter].users[i].name,'\0',10);
+		                  strcpy(sessq[counter].users[i].name,curr->username);
                       sessq[counter].size++;
                       curr->sess_id = counter;
                       char* message = "Joined session\n";
@@ -424,35 +459,85 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
 
     else if(strcmp(com,"/leavesession") == 0){
 
-      int id = curr->sess_id;
+      if (sessq[0].name == NULL)
+      {
+            char* message = "There are no sessions available\n";
+            send(fds,message,strlen(message),0);
+            return; 
+      }
 
+      int id = curr->sess_id;
+      char* sessname = strtok(NULL,":");
+      sessname = strtok(NULL,":");
+      printf("%s\n", sessname);
+      //      printf("%s and %d\n",sessname,strlen(sessname));
+      /*
       if(curr->sess_id != -1){
         for(int i =0;i<10;i++){
           if(sessq[id].users[i].fd == fds){
             sessq[id].users[i].fd = -1;
             sessq[id].size--;
+	    memset(sessq[id].users[i].name,'\0',10);
+	    //	    sessname = strdup(sessq[id].name);
 
-            if(sessq[id].size == 0){
+	    if(sessq[id].size == 0){
               sessq[id].active = 0;
               memset(sessq[id].name, 0, strlen(sessq[id].name));
             }
             
             curr->sess_id = -1;
             char message[13];
-            sprintf(message,"Left session %s\n",sessq[id].name);
+            sprintf(message,"Left session %s\n",sessname);
             send(fds,message,strlen(message),0);
             memset(message, 0, strlen(message));
+	    free(sessname);
             return;
           }
         }
       }
 
       else{
-        char* message = "Can only leave sessions you're in\n";
-        send(fds,message,strlen(message),0);
-        return;
+       char* message = "Can only leave sessions you're in\n";
+       send(fds,message,strlen(message),0);
+       return; 
+      }
+    
+      
+      */
+
+      for(int i=0;i<10;i++){
+      	if(strcmp(sessname,sessq[i].name) == 0){
+          printf("here\n");
+      	  for(int j=0;j<10;j++){
+       	    if(sessq[i].users[j].fd == fds){
+               printf("here 1\n");
+      	      sessq[i].users[j].fd = -1;
+	            sessq[i].size--;
+	            memset(sessq[i].users[j].name,'\0',10);
+	   
+              if(sessq[i].size == 0){
+                printf("here 2\n");
+                sessq[i].active = 0;
+                memset(sessq[i].name,'\0',strlen(sessq[i].name));
+              }
+              if(sessq[i].sess_id == curr->sess_id){
+                curr->sess_id = -1;
+              }
+
+              char message[13];
+              printf("here 3\n");
+              sprintf(message,"Left session %s\n",sessname);
+              send(fds,message,strlen(message),0);
+              memset(message,'\0',strlen(message));
+              return;
+	          }
+	        }
+	      }
       }
       
+      char* message = "You can't leave that session, you're not in it\n";
+      send(fds,message,strlen(message),0);
+      return;
     }
 
     else if(strcmp(com,"/list") == 0){
@@ -461,9 +546,9 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
       struct user* head = onlineq->head;
       char message[1000];
       memset(message, 0, 1000);
-
+      /*
       strcpy(message, "Clients online: ");
-
+      
       char users[500];
       while(head!=NULL){
         sprintf(users, "%s, ", head->username);
@@ -471,8 +556,6 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
         head=head->next;
       }
       strcat(message, "\nSessions available: ");
-
-
 
       char sessions[250];
       memset(sessions, 0, 250);
@@ -484,6 +567,31 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
           
         }
       }
+
+      */
+
+      strcpy(message,"Sessions available:\n");
+      
+      char sessions[100];
+      memset(sessions, '\0', 100);
+      
+      for(int i =0;i<10;i++){  
+        if(sessq[i].active == 1 && sessq[i].size < 10){  
+          sprintf(sessions," %s: ",sessq[i].name);
+          char names[20];
+          for(int j=0;j<10;j++){
+            if(sessq[i].users[j].fd != -1){ 
+              sprintf(names," %s ",sessq[i].users[j].name);
+              strcat(sessions,names);
+              memset(names,'\0',20);
+            }
+          }
+          strcat(message,sessions);
+          strcat(sessions, "\n");
+          memset(sessions,'\0', 100);  
+        } 
+      }                       
+      
       send(fds, message, strlen(message),0);
       return;
     }
@@ -492,23 +600,27 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
 
       //if in session leave
       
-      if(curr->sess_id != -1){
-        int id = curr->sess_id;
-        for(int i =0;i<10;i++){
-          if(sessq[id].users[i].fd == fds){
-            sessq[id].users[i].fd = -1;
-            sessq[id].size--;
+      for(int i=0;i<10;i++){
 
-            if(sessq[id].size == 0){
-              sessq[id].active = 0;
-              sessq[id].name = NULL;
+        for(int j=0;j<10;j++){
+          if(sessq[i].users[j].fd == fds){
+            char *sess_name = sessq[i].name;
+            sessq[i].users[j].fd = -1;
+            sessq[i].size--;
+            memset(sessq[i].users[j].name,'\0',10);
+    
+            if(sessq[i].size == 0){
+              sessq[i].active = 0;
+              memset(sessq[i].name,'\0',strlen(sessq[i].name));
             }
-            
-            curr->sess_id = -1;
+            if(sessq[i].sess_id == curr->sess_id){
+              curr->sess_id = -1;
+            }
+
             char message[13];
-            sprintf(message,"Left session %d\n",id);
+            sprintf(message,"Left session %s\n",sess_name);
             send(fds,message,strlen(message),0);
-            break;
+            memset(message,'\0',strlen(message));
           }
         }
       }
@@ -526,21 +638,22 @@ void process_user_message(char *buf,int fds, char* ipstr, struct online* onlineq
 
 
       if(curr->sess_id != -1){
-
+        char from[50];
+        char* msg = strtok(NULL,"\0");
         for(int i=0;i<10;i++){
-
-          if(sessq[curr->sess_id].users[i].fd != fds && sessq[curr->sess_id].users[i].fd != -1){
-
-            char* msg = strtok(NULL,"\0");
-            send(sessq[curr->sess_id].users[i].fd,msg,strlen(msg),0);
-            memset(msg, 0, strlen(msg));
-            
+          if(sessq[curr->sess_id].users[i].fd != fds && sessq[curr->sess_id].users[i].fd != -1){ 
+            sprintf(from,"%s: ",sessq[curr->sess_id].name);
+            strcat(from,msg);
+            strcat(from, "\n");
+            send(sessq[curr->sess_id].users[i].fd,from,strlen(from),0);
+            memset(from,0,50);
           }
         }
-	      return;
+        memset(msg, 0,strlen(msg));
+        return;
       }
       
-      char*message = "Not a supported command";
+      char*message = "Not a supported command\n";
     
       send(fds,message,strlen(message),0);
       return;
@@ -579,10 +692,11 @@ int main(void)
     for(int j = 0;j<10;j++){
 
      struct actives* g = (struct actives*)malloc(sizeof(struct actives)*10);
-
+     
      for(int k=0;k<10;k++){
        g[k].fd = -1;
        g[k].sess_id= -1;
+       g[k].name = (char*)malloc(sizeof(char)*10);
      }
      
      sessq[j].users = g;
@@ -652,7 +766,11 @@ int main(void)
 
     // keep track of the biggest file descriptor
     fdmax = listener; // so far, it's this one
-    
+
+    struct timeval RTTstart0, RTTstart1, RTTstart2, RTTstart3, RTTstart4, RTTstart5, RTTstart6, RTTstart7, RTTstart8, RTTstart9, RTTend;
+    struct timeval idle_time_list[10] = {RTTstart0, RTTstart1, RTTstart2, RTTstart3, RTTstart4, RTTstart5, RTTstart6, RTTstart7, RTTstart8, RTTstart9};
+
+
     // main loop
     for(;;) {
         read_fds = master; // copy it
@@ -690,6 +808,7 @@ int main(void)
                                 remoteIP, INET6_ADDRSTRLEN),
                             newfd);
                         send(newfd, welcome_message, strlen(welcome_message),0);
+                            gettimeofday(&idle_time_list[newfd], NULL);
                         break;
                     }
                 } else {
@@ -710,32 +829,35 @@ int main(void)
 		      int suc = getpeername(i,(struct sockaddr*)&addr,&len);
 
 		      if(addr.ss_family == AF_INET){
-			  struct sockaddr_in *c = (struct sockaddr_in *)&addr;
-			  //  porter = ntohs(c->sin_port);
-			  //printf("after porter %s\n",c->sin_port);
-			  inet_ntop(AF_INET, &c->sin_addr, ipstr, INET_ADDRSTRLEN);
-			  //printf("%c\n",ef);
+              struct sockaddr_in *c = (struct sockaddr_in *)&addr;
+              //  porter = ntohs(c->sin_port);
+              //printf("after porter %s\n",c->sin_port);
+              inet_ntop(AF_INET, &c->sin_addr, ipstr, INET_ADDRSTRLEN);
+              //printf("%c\n",ef);
 		      }
 		      else { // AF_INET6
-			  struct sockaddr_in6 *c = (struct sockaddr_in6 *)&addr;
-			  //printf("inside else\n");
-			  //porter = ntohs(c->sin6_port);
-			  inet_ntop(AF_INET6, &c->sin6_addr, ipstr,INET_ADDRSTRLEN);
+            struct sockaddr_in6 *c = (struct sockaddr_in6 *)&addr;
+            //printf("inside else\n");
+            //porter = ntohs(c->sin6_port);
+            inet_ntop(AF_INET6, &c->sin6_addr, ipstr,INET_ADDRSTRLEN);
 		      }
 		      //printf("proces\n");
-		      process_user_message(buf,i,ipstr, onlineq, sessq);
-                        //printf("Data: %s\n", buf);
-                        // for(j = 0; j <= fdmax; j++) {
-                        //     // send to everyone!
-                        //     if (FD_ISSET(j, &master)) {
-                        //         // except the listener and ourselves
-                        //         if (j != listener && j != i) {
-                        //             if (send(j, buf, nbytes, 0) == -1) {
-                        //                 perror("send");
-                        //             }
-                        //         }
-                        //     }
-                        // }
+          gettimeofday(&RTTend,NULL);
+          unsigned long idle_time = (RTTend.tv_sec - idle_time_list[i].tv_sec);
+          if (idle_time <= 60)
+          {
+            process_user_message(buf,i,ipstr, onlineq, sessq);
+            gettimeofday(&idle_time_list[i], NULL);
+          }
+          else
+          {
+            printf("Idle Time: %lu s\n",idle_time);
+            char timeout[55] = "You have been kicked from the server due to inactivity";
+            send(i, timeout, strlen(timeout),0);
+            nbytes = recv(i, buf, sizeof buf, 0);
+            process_user_message(buf,i,ipstr, onlineq, sessq);
+
+          }
                     }
                 } // END handle data from client
             } // END got new incoming connection
